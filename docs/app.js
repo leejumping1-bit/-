@@ -4,12 +4,15 @@
    (실제 데이터는 GitHub Actions 크롤러가 매월 이 파일들을 갱신합니다)
    ============================================================ */
 
+const PAGE_SIZE = 20;
+
 const state = {
   items: [],
   filtered: [],
   selectedId: null,
   months: [],       // ["2026-01", "2026-02", ...]
-  selectedMonthIdx: 0 // 0 = 전체
+  selectedMonthIdx: 0, // 0 = 전체
+  currentPage: 1
 };
 
 const $ = (sel) => document.querySelector(sel);
@@ -113,6 +116,7 @@ function applyFilters() {
     return true;
   });
 
+  state.currentPage = 1; // 필터 변경 시 첫 페이지로 리셋
   renderTable();
 }
 
@@ -123,10 +127,20 @@ function renderTable() {
 
   if (state.filtered.length === 0) {
     tbody.innerHTML = `<tr><td colspan="8" class="empty-state">선택한 조건에 해당하는 항목이 없습니다.</td></tr>`;
+    renderPagination();
     return;
   }
 
-  state.filtered.forEach((item, idx) => {
+  const totalPages = Math.ceil(state.filtered.length / PAGE_SIZE);
+  if (state.currentPage > totalPages) state.currentPage = totalPages;
+  if (state.currentPage < 1) state.currentPage = 1;
+
+  const start = (state.currentPage - 1) * PAGE_SIZE;
+  const end = start + PAGE_SIZE;
+  const pageItems = state.filtered.slice(start, end);
+
+  pageItems.forEach((item, idx) => {
+    const globalIdx = start + idx; // 전체 목록 기준 번호
     const tr = document.createElement('tr');
     tr.dataset.id = item.id;
     if (!item.verified) tr.classList.add('unverified');
@@ -140,7 +154,7 @@ function renderTable() {
           : '<span class="badge badge-fallback">목록링크</span>');
 
     tr.innerHTML = `
-      <td class="col-no">${idx + 1}</td>
+      <td class="col-no">${globalIdx + 1}</td>
       <td class="col-date">${item.published_date || '-'}</td>
       <td class="col-date">${item.effective_date || '-'}</td>
       <td class="col-pub">${item.agency_kr || item.publisher || '-'}</td>
@@ -155,12 +169,72 @@ function renderTable() {
     tr.addEventListener('click', () => selectItem(item.id));
     tbody.appendChild(tr);
   });
+
+  renderPagination();
+}
+
+/* ---------------- 페이지네이션 렌더 ---------------- */
+function renderPagination() {
+  const container = $('#paginationBar');
+  if (!container) return;
+
+  const total = state.filtered.length;
+  const totalPages = Math.ceil(total / PAGE_SIZE);
+
+  if (totalPages <= 1) {
+    container.innerHTML = '';
+    // 항목 수 정보는 항상 표시
+    const info = $('#pageInfo');
+    if (info) info.textContent = total > 0 ? `총 ${total}건` : '';
+    return;
+  }
+
+  const cur = state.currentPage;
+  const start = (cur - 1) * PAGE_SIZE + 1;
+  const end = Math.min(cur * PAGE_SIZE, total);
+
+  // 페이지 범위: 현재 페이지 기준 앞뒤 2페이지씩 표시
+  const WING = 2;
+  let html = '';
+
+  // 총 건수 정보
+  html += `<span class="page-info" id="pageInfo">${start}–${end} / 총 ${total}건</span>`;
+
+  // 처음 / 이전
+  html += `<button class="page-btn" ${cur === 1 ? 'disabled' : ''} data-page="1" title="첫 페이지">«</button>`;
+  html += `<button class="page-btn" ${cur === 1 ? 'disabled' : ''} data-page="${cur - 1}" title="이전">‹</button>`;
+
+  // 페이지 번호
+  let from = Math.max(1, cur - WING);
+  let to = Math.min(totalPages, cur + WING);
+
+  if (from > 1) html += `<span class="page-ellipsis">…</span>`;
+  for (let p = from; p <= to; p++) {
+    html += `<button class="page-btn${p === cur ? ' active' : ''}" data-page="${p}">${p}</button>`;
+  }
+  if (to < totalPages) html += `<span class="page-ellipsis">…</span>`;
+
+  // 다음 / 마지막
+  html += `<button class="page-btn" ${cur === totalPages ? 'disabled' : ''} data-page="${cur + 1}" title="다음">›</button>`;
+  html += `<button class="page-btn" ${cur === totalPages ? 'disabled' : ''} data-page="${totalPages}" title="마지막 페이지">»</button>`;
+
+  container.innerHTML = html;
+
+  // 버튼 이벤트
+  container.querySelectorAll('.page-btn:not([disabled])').forEach(btn => {
+    btn.addEventListener('click', () => {
+      state.currentPage = parseInt(btn.dataset.page, 10);
+      renderTable();
+      // 테이블 상단으로 스크롤
+      $('#registerPanel').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  });
 }
 
 /* ---------------- 항목 선택 → 요약 + Gap분석 로드 ---------------- */
 function selectItem(id) {
   state.selectedId = id;
-  renderTable();
+  renderTable(); // 선택 강조를 위해 현재 페이지 유지
   const item = state.items.find(i => i.id === id);
   renderSummary(item);
   renderGap(item);
@@ -245,7 +319,7 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
-/* ---------------- 엑셀 다운로드 (현재 필터 기준) ---------------- */
+/* ---------------- 엑셀 다운로드 (현재 필터 기준 — 전체 페이지) ---------------- */
 function downloadXlsx() {
   const rows = state.filtered.map((item, idx) => ({
     'No.': idx + 1,
