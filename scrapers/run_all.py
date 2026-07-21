@@ -62,7 +62,13 @@ def main():
             summary[key] = f"오류: {e}"
             continue
 
-        if block_info is not None and getattr(block_info, "blocked", False):
+        # block_info 처리: list(차단된 게시판 목록) 또는 FetchResult 객체 모두 지원
+        if isinstance(block_info, list) and block_info:
+            # mfds.run() 등: 차단된 게시판 키 목록을 반환
+            print(f"[BLOCKED] {key}: 차단된 게시판 {block_info} — self-hosted runner 사용을 확인하세요.")
+            summary[key] = f"일부 차단({len(block_info)}개 게시판), {len(new_items)}건 수집"
+            # 차단되지 않은 게시판의 결과는 그대로 사용
+        elif block_info is not None and getattr(block_info, "blocked", False):
             print(f"[BLOCKED] {key}: {block_info.error} — self-hosted runner 사용을 확인하세요.")
             summary[key] = "차단됨(접속 실패)"
             continue
