@@ -94,6 +94,9 @@ function bindEvents() {
   $('#scopeFilter').addEventListener('change', applyFilters);
   $('#sopOnly').addEventListener('change', applyFilters);
   $('#downloadXlsx').addEventListener('click', downloadXlsx);
+
+  // 뷰포트 전환(데스크탑↔모바일) 시 테이블/카드 자동 재렌더
+  window.matchMedia('(max-width: 720px)').addEventListener('change', () => renderTable());
 }
 
 /* ---------------- 필터 적용 + 테이블 렌더 ---------------- */
@@ -120,13 +123,27 @@ function applyFilters() {
   renderTable();
 }
 
+/* ---------------- 모바일 판별 ---------------- */
+function isMobile() {
+  return window.matchMedia('(max-width: 720px)').matches;
+}
+
+/* ---------------- 링크뱃지 헬퍼 ---------------- */
+function linkBadgeHtml(sourceType) {
+  if (sourceType === 'direct')     return '<span class="badge badge-direct">직접링크</span>';
+  if (sourceType === 'unverified') return '<span class="badge badge-unverified">미확인</span>';
+  return '<span class="badge badge-fallback">목록링크</span>';
+}
+
 /* ---------------- 검토대장 테이블 렌더 ---------------- */
 function renderTable() {
-  const tbody = $('#registerBody');
-  tbody.innerHTML = '';
-
   if (state.filtered.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="8" class="empty-state">선택한 조건에 해당하는 항목이 없습니다.</td></tr>`;
+    // 빈 상태: 테이블/카드 컨테이너 모두 초기화
+    $('#registerBody').innerHTML =
+      `<tr><td colspan="8" class="empty-state">선택한 조건에 해당하는 항목이 없습니다.</td></tr>`;
+    const cardList = $('#cardList');
+    if (cardList) cardList.innerHTML =
+      `<p class="empty-state">선택한 조건에 해당하는 항목이 없습니다.</p>`;
     renderPagination();
     return;
   }
@@ -136,22 +153,30 @@ function renderTable() {
   if (state.currentPage < 1) state.currentPage = 1;
 
   const start = (state.currentPage - 1) * PAGE_SIZE;
-  const end = start + PAGE_SIZE;
-  const pageItems = state.filtered.slice(start, end);
+  const pageItems = state.filtered.slice(start, start + PAGE_SIZE);
+
+  if (isMobile()) {
+    renderCards(pageItems, start);
+  } else {
+    renderTableRows(pageItems, start);
+  }
+
+  renderPagination();
+}
+
+/* ---------------- 데스크탑: 테이블 행 렌더 ---------------- */
+function renderTableRows(pageItems, start) {
+  const tbody = $('#registerBody');
+  tbody.innerHTML = '';
 
   pageItems.forEach((item, idx) => {
-    const globalIdx = start + idx; // 전체 목록 기준 번호
+    const globalIdx = start + idx;
     const tr = document.createElement('tr');
     tr.dataset.id = item.id;
     if (!item.verified) tr.classList.add('unverified');
     if (item.id === state.selectedId) tr.classList.add('selected');
 
     const linkUrl = item.source_type === 'direct' ? item.source_url : item.fallback_url;
-    const linkBadge = item.source_type === 'direct'
-      ? '<span class="badge badge-direct">직접링크</span>'
-      : (item.source_type === 'unverified'
-          ? '<span class="badge badge-unverified">미확인</span>'
-          : '<span class="badge badge-fallback">목록링크</span>');
 
     tr.innerHTML = `
       <td class="col-no">${globalIdx + 1}</td>
@@ -160,7 +185,8 @@ function renderTable() {
       <td class="col-pub">${item.agency_kr || item.publisher || '-'}</td>
       <td class="col-regno"><span class="reg-no-mono">${item.reg_no || '-'}</span></td>
       <td class="col-title">
-        <a class="reg-title-link" href="${linkUrl || '#'}" target="_blank" rel="noopener" onclick="event.stopPropagation();">${item.title}</a>${linkBadge}
+        <a class="reg-title-link" href="${linkUrl || '#'}" target="_blank" rel="noopener"
+           onclick="event.stopPropagation();">${item.title}</a>${linkBadgeHtml(item.source_type)}
       </td>
       <td class="col-scope"><span class="scope-tag">${item.scope || '-'}</span></td>
       <td class="col-sop">${item.sop_flag ? '★' : ''}</td>
@@ -169,8 +195,44 @@ function renderTable() {
     tr.addEventListener('click', () => selectItem(item.id));
     tbody.appendChild(tr);
   });
+}
 
-  renderPagination();
+/* ---------------- 모바일: 카드 렌더 ---------------- */
+function renderCards(pageItems, start) {
+  const cardList = $('#cardList');
+  if (!cardList) return;
+  cardList.innerHTML = '';
+
+  pageItems.forEach((item, idx) => {
+    const globalIdx = start + idx;
+    const linkUrl = item.source_type === 'direct' ? item.source_url : item.fallback_url;
+    const selected = item.id === state.selectedId;
+
+    const card = document.createElement('div');
+    card.className = 'reg-card' + (selected ? ' selected' : '') + (!item.verified ? ' unverified' : '');
+    card.dataset.id = item.id;
+
+    card.innerHTML = `
+      <div class="card-top">
+        <span class="card-no">${globalIdx + 1}</span>
+        <span class="card-agency">${item.agency_kr || item.publisher || '-'}</span>
+        ${item.sop_flag ? '<span class="card-sop">★ SOP</span>' : ''}
+      </div>
+      <div class="card-title">
+        <a class="reg-title-link" href="${linkUrl || '#'}" target="_blank" rel="noopener"
+           onclick="event.stopPropagation();">${item.title}</a>
+        ${linkBadgeHtml(item.source_type)}
+      </div>
+      <div class="card-meta">
+        ${item.reg_no ? `<span class="reg-no-mono">${item.reg_no}</span>` : ''}
+        ${item.published_date ? `<span>고시일 ${item.published_date}</span>` : ''}
+        ${item.scope ? `<span class="scope-tag">${item.scope}</span>` : ''}
+      </div>
+    `;
+
+    card.addEventListener('click', () => selectItem(item.id));
+    cardList.appendChild(card);
+  });
 }
 
 /* ---------------- 페이지네이션 렌더 ---------------- */
