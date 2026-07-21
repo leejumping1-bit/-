@@ -1,0 +1,128 @@
+name: Manual Regulatory Crawl
+
+# GitHub Actions UI에서 수동으로 실행 (Actions → Manual Regulatory Crawl → Run workflow)
+on:
+  workflow_dispatch:
+    inputs:
+      agency:
+        description: |
+          실행할 기관을 선택하세요.
+          ※ mfds 는 self-hosted runner(한국 IP)가 등록되어 있어야 합니다.
+          ※ all 선택 시 global 잡 완료 후 mfds 잡이 순차 실행됩니다.
+        required: true
+        type: choice
+        default: all
+        options:
+          - all
+          - mfds
+          - mdcg
+          - fda
+          - mhra
+          - mdsap
+          - tga
+          - health_canada
+          - pmda
+
+      since_year:
+        description: "수집 시작 연도 (예: 2026)"
+        required: true
+        default: "2026"
+        type: string
+
+      since_month:
+        description: "수집 시작 월, 1~12 (예: 1)"
+        required: true
+        default: "1"
+        type: string
+
+# ────────────────────────────────────────────────
+# Job 1: mfds 를 제외한 7개 기관 — ubuntu-latest
+#   - agency == 'all'  → 7개 기관 모두 실행, artifact 업로드 후 mfds 잡에 전달
+#   - agency == 특정 기관(mfds 제외) → 해당 기관만 실행, 바로 push
+#   - agency == 'mfds' → skip
+# ────────────────────────────────────────────────
+jobs:
+  crawl-global:
+    runs-on: ubuntu-latest
+    if: inputs.agency != 'mfds'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Crawl — global agencies
+        run: |
+          if [ "${{ inputs.agency }}" = "all" ]; then
+            TARGETS="mdcg fda mhra mdsap tga health_canada pmda"
+          else
+            TARGETS="${{ inputs.agency }}"
+          fi
+          python scrapers/run_all.py --only $TARGETS \
+            --since-year ${{ inputs.since_year }} \
+            --since-month ${{ inputs.since_month }}
+
+      # all 모드: artifact 로 넘기고 push 는 mfds 잡에서 일괄 처리
+      - name: Upload intermediate register.json (all 모드)
+        if: inputs.agency == 'all'
+        uses: actions/upload-artifact@v4
+        with:
+          name: register-global-manual
+          path: docs/data/
+
+      # 단일 기관 모드: 바로 commit & push
+      - name: Commit & push (단일 기관)
+        if: inputs.agency != 'all'
+        run: |
+          git config user.name "regulatory-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add docs/data/register.json
+          git diff --staged --quiet || git commit -m \
+            "chore: manual crawl [${{ inputs.agency }}] (${{ inputs.since_year }}-$(printf '%02d' ${{ inputs.since_month }}))"
+          git push
+
+# ────────────────────────────────────────────────
+# Job 2: MFDS — self-hosted runner (한국 소재 PC/서버)
+#   - agency == 'all'  → crawl-global 완료 후 artifact 받아 MFDS 추가, 최종 push
+#   - agency == 'mfds' → crawl-global skip 됐어도 if: always() 로 독립 실행
+# ────────────────────────────────────────────────
+  crawl-mfds:
+    runs-on: [self-hosted, korea]
+    needs: crawl-global
+    # crawl-global 이 skip 됐어도(mfds 단독 실행) 이 잡은 반드시 실행
+    if: always() && (inputs.agency == 'mfds' || inputs.agency == 'all')
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # all 모드에서만 artifact(global 결과) 를 덮어씀
+      - name: Download intermediate register.json (all 모드)
+        if: inputs.agency == 'all'
+        uses: actions/download-artifact@v4
+        with:
+          name: register-global-manual
+          path: docs/data/
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Crawl — MFDS
+        run: |
+          python scrapers/run_all.py --only mfds \
+            --since-year ${{ inputs.since_year }} \
+            --since-month ${{ inputs.since_month }}
+
+      - name: Commit & push updated register
+        run: |
+          git config user.name "regulatory-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add docs/data/register.json docs/data/gap/
+          git diff --staged --quiet || git commit -m \
+            "chore: manual crawl [${{ inputs.agency }}] (${{ inputs.since_year }}-$(printf '%02d' ${{ inputs.since_month }}))"
+          git pull --rebase
+          git push
