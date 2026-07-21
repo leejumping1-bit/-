@@ -180,33 +180,36 @@ function renderPagination() {
 
   const total = state.filtered.length;
   const totalPages = Math.ceil(total / PAGE_SIZE);
+  const cur = state.currentPage;
 
+  // 총 건수 정보 (항상 표시)
+  const countStart = total > 0 ? (cur - 1) * PAGE_SIZE + 1 : 0;
+  const countEnd   = Math.min(cur * PAGE_SIZE, total);
+  const infoText   = total > 0
+    ? (totalPages > 1 ? `${countStart}–${countEnd} / 총 ${total}건` : `총 ${total}건`)
+    : '';
+
+  // 1페이지 이하: 카운트만 표시하고 버튼은 없음
   if (totalPages <= 1) {
-    container.innerHTML = '';
-    // 항목 수 정보는 항상 표시
-    const info = $('#pageInfo');
-    if (info) info.textContent = total > 0 ? `총 ${total}건` : '';
+    container.innerHTML = infoText
+      ? `<span class="page-info">${infoText}</span>`
+      : '';
     return;
   }
-
-  const cur = state.currentPage;
-  const start = (cur - 1) * PAGE_SIZE + 1;
-  const end = Math.min(cur * PAGE_SIZE, total);
 
   // 페이지 범위: 현재 페이지 기준 앞뒤 2페이지씩 표시
   const WING = 2;
   let html = '';
 
-  // 총 건수 정보
-  html += `<span class="page-info" id="pageInfo">${start}–${end} / 총 ${total}건</span>`;
+  html += `<span class="page-info">${infoText}</span>`;
 
   // 처음 / 이전
   html += `<button class="page-btn" ${cur === 1 ? 'disabled' : ''} data-page="1" title="첫 페이지">«</button>`;
   html += `<button class="page-btn" ${cur === 1 ? 'disabled' : ''} data-page="${cur - 1}" title="이전">‹</button>`;
 
   // 페이지 번호
-  let from = Math.max(1, cur - WING);
-  let to = Math.min(totalPages, cur + WING);
+  const from = Math.max(1, cur - WING);
+  const to   = Math.min(totalPages, cur + WING);
 
   if (from > 1) html += `<span class="page-ellipsis">…</span>`;
   for (let p = from; p <= to; p++) {
