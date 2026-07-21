@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>국내외 규격 및 가이던스 업데이트 검토대장</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700;900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="brand">
+      <span class="brand-mark">RA/QA</span>
+      <div class="brand-text">
+        <h1>국내외 규격 및 가이던스 업데이트 검토대장</h1>
+        <p>Global Regulatory &amp; Standards Watch — Gap Analysis Console</p>
+      </div>
+    </div>
+    <div class="topbar-meta">
+      <span id="lastUpdated">최종 갱신: -</span>
+      <span id="sourceCount">-</span>
+    </div>
+  </div>
+</header>
+
+<main class="layout">
+
+  <!-- ================= 1. 검토대장 ================= -->
+  <section class="panel" id="registerPanel">
+    <div class="panel-head">
+      <h2><span class="step">01</span> 국내외 규격 및 가이던스 검토대장</h2>
+      <div class="panel-actions">
+        <button id="downloadXlsx" class="btn btn-primary" title="현재 필터 기준 엑셀 다운로드">
+          ⬇ 검토대장 엑셀 다운로드
+        </button>
+      </div>
+    </div>
+
+    <div class="filter-bar">
+      <div class="filter-group">
+        <label>조회 월</label>
+        <div class="month-slider-wrap">
+          <input type="range" id="monthSlider" min="0" max="0" value="0" step="1">
+          <div class="month-slider-label" id="monthSliderLabel">전체 기간</div>
+        </div>
+      </div>
+      <div class="filter-group">
+        <label>발행기관</label>
+        <select id="agencyFilter"><option value="">전체</option></select>
+      </div>
+      <div class="filter-group">
+        <label>적용범위</label>
+        <select id="scopeFilter"><option value="">전체</option></select>
+      </div>
+      <div class="filter-group checkbox-group">
+        <label class="checkbox-label"><input type="checkbox" id="sopOnly"> SOP 반영 필요(★)만 보기</label>
+      </div>
+    </div>
+
+    <div class="table-scroll">
+      <table id="registerTable">
+        <thead>
+          <tr>
+            <th class="col-no">No.</th>
+            <th class="col-date">고시일<br><span class="th-en">Published</span></th>
+            <th class="col-date">시행일<br><span class="th-en">Effective</span></th>
+            <th class="col-pub">발행처<br><span class="th-en">Published by</span></th>
+            <th class="col-regno">규격/가이던스 번호</th>
+            <th class="col-title">제목</th>
+            <th class="col-scope">적용범위</th>
+            <th class="col-sop">SOP</th>
+          </tr>
+        </thead>
+        <tbody id="registerBody"></tbody>
+      </table>
+    </div>
+    <p class="table-footnote">※ 제목 클릭 시 원문 페이지로 이동합니다. <span class="badge badge-direct">직접링크</span>는 개정문서 원문 페이지, <span class="badge badge-fallback">목록링크</span>는 해당 기관 접속 차단/개별 페이지 미확인 시 대체된 목록 페이지입니다. 행을 클릭하면 하단 Gap 분석이 갱신됩니다.</p>
+  </section>
+
+  <!-- ================= 2. 요약 ================= -->
+  <section class="panel" id="summaryPanel">
+    <div class="panel-head">
+      <h2><span class="step">02</span> 업데이트 내용 요약 <span class="subtle">— 선택 항목 자동 요약(심사원 관점)</span></h2>
+    </div>
+    <div id="summaryBody" class="summary-body">
+      <p class="empty-state">위 검토대장에서 항목을 선택하면 요약이 표시됩니다.</p>
+    </div>
+  </section>
+
+  <!-- ================= 3. GAP 분석 ================= -->
+  <section class="panel" id="gapPanel">
+    <div class="panel-head">
+      <h2><span class="step">03</span> Gap 분석 <span class="subtle">— 개정 전/후 원문 대조</span></h2>
+      <div class="legend">
+        <span class="legend-item"><span class="legend-swatch del"></span>삭제(개정 전만 존재)</span>
+        <span class="legend-item"><span class="legend-swatch add"></span>신규/변경(개정 후 추가)</span>
+        <span class="legend-item"><span class="legend-swatch na"></span>N.A. (신규 제정)</span>
+      </div>
+    </div>
+    <div id="gapBody" class="gap-body">
+      <p class="empty-state">위 검토대장에서 항목을 선택하면 Gap 분석 결과가 표시됩니다.</p>
+    </div>
+  </section>
+
+  <footer class="page-footer">
+    <p>데이터 출처: MFDS · MDCG(EU) · FDA(US) · MHRA(UK) · MDSAP · TGA(AU) · Health Canada · PMDA(JP). 각 항목의 원문 링크에서 최종 확인하시기 바랍니다. 본 페이지는 사내 QA 모니터링 참고용이며 법적 효력이 없습니다.</p>
+  </footer>
+
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>
