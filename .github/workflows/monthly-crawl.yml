@@ -1,0 +1,57 @@
+name: Monthly Regulatory Crawl
+
+on:
+  schedule:
+    # 매월 1일 00:10 UTC = 한국시간 09:10
+    - cron: "10 0 1 * *"
+  workflow_dispatch: {}
+
+jobs:
+  crawl-global:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Crawl MDCG / FDA / MHRA / MDSAP / TGA / Health Canada / PMDA
+        run: |
+          python scrapers/run_all.py --only mdcg fda mhra mdsap tga health_canada pmda
+
+      - name: Upload intermediate register.json
+        uses: actions/upload-artifact@v4
+        with:
+          name: register-global
+          path: docs/data/
+
+  crawl-mfds:
+    needs: crawl-global
+    runs-on: [self-hosted, korea]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download intermediate register.json
+        uses: actions/download-artifact@v4
+        with:
+          name: register-global
+          path: docs/data/
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Crawl MFDS
+        run: |
+          python scrapers/run_all.py --only mfds
+
+      - name: Commit & push updated register
+        run: |
+          git config user.name "regulatory-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add docs/data/register.json docs/data/gap/*.json
+          git diff --staged --quiet || git commit -m "chore: monthly regulatory data update ($(date +'%Y-%m'))"
+          git push
